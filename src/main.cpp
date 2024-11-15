@@ -12,6 +12,7 @@ using namespace Gdiplus;
 
 #pragma comment(lib, "gdiplus.lib")
 #pragma comment(lib, "msimg32.lib")
+#pragma comment(linker, "/SUBSYSTEM:WINDOWS")
 
 HINSTANCE hInst;
 HWND hwnd;
