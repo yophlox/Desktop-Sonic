@@ -7,7 +7,7 @@
 - Arrow keys: Move Sonic
 - Z: Jump
 
-# Credits
+## Credits
 
 YoPhlox - Program :D
 
