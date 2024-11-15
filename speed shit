@@ -1,0 +1,79 @@
+running vars:
+
+acceleration_speed	0.046875 (12 subpixels)
+deceleration_speed	0.5 (128 subpixels)
+friction_speed	0.046875 (12 subpixels)
+top_speed	6
+
+run template code:
+
+if (the player is pressing left)
+{
+    if (Ground Speed > 0) //if moving to the right
+    {
+        Ground Speed -= deceleration_speed;  //decelerate
+        if (Ground Speed <= 0)
+            Ground Speed = -0.5;  //emulate deceleration quirk
+    }
+    else if (Ground Speed > -top_speed) //if moving to the left
+    {
+        Ground Speed -= acceleration_speed;  //accelerate
+        if (Ground Speed <= -top_speed)
+            Ground Speed = -top_speed; //impose top speed limit
+    }
+}
+
+if (the player is pressing right)
+{
+    if (Ground Speed < 0) //if moving to the left
+    {
+        Ground Speed += deceleration_speed; //decelerate
+        if (Ground Speed >= 0)
+            Ground Speed = 0.5; //emulate deceleration quirk
+    }
+    else if (Ground Speed < top_speed) //if moving to the right
+    {
+        Ground Speed += acceleration_speed; //accelerate
+        if (Ground Speed >= top_speed)
+            Ground Speed = top_speed; //impose top speed limit
+    }
+}
+
+if (the player is not pressing left or right)
+    Ground Speed -= minimum(absolute(Ground Speed), friction_speed) * sign(Ground Speed); //decelerate
+
+jumping vars:
+
+jump_force	6.5 (6 pixels and 128 supbixels) - 6 for Knuckles
+gravity_force	0.21875 (56 subpixels)
+
+jumping code:
+
+X Speed -= jump_force * sin(Ground Angle);
+Y Speed -= jump_force * cos(Ground Angle);
+
+air vars:
+
+air_acceleration_speed	0.09375 (24 subpixels)
+gravity_force	0.21875 (56 subpixels)
+top_speed	6
+
+air code:
+
+TOP Y SPEED:
+
+Y Speed += gravity_force;
+if (Y Speed > 16) Y Speed = 16;
+
+air drag:
+
+if (Y Speed < 0 && Y Speed > -4)
+{
+    X Speed -= ((X Speed div 0.125) / 256);
+}
+
+
+roll vars:
+
+roll_friction_speed	0.0234375 (6 subpixels)
+roll_deceleration_speed	0.125 (32 subpixels)
