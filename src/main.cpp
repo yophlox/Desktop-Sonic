@@ -75,6 +75,19 @@ Image* crouchSprite = nullptr;
 bool isLookingUp = false;
 bool isCrouching = false;
 
+LARGE_INTEGER frequency;
+LARGE_INTEGER lastTime;
+const double TARGET_FPS = 60.0;
+const double TIME_STEP = 1.0 / TARGET_FPS;
+double accumulator = 0.0;
+
+void UpdateTaskbarRect() {
+    HWND taskbar = FindWindow(L"Shell_TrayWnd", NULL);
+    if (taskbar) {
+        GetWindowRect(taskbar, &taskbarRect);
+    }
+}
+
 bool LoadSprites() {
     idleSprite = Image::FromFile(L"assets/images/idle.png");
     if (!idleSprite || idleSprite->GetLastStatus() != Ok) {
@@ -162,11 +175,43 @@ void PickNewTarget() {
     isMoving = true;
 }
 
-bool CheckCollision(int x, int y) {
-    POINT pt = { x + WINDOW_SIZE/2, y + WINDOW_SIZE };
+bool IsValidWindow(HWND window) {
+    if (!IsWindowVisible(window) || window == hwnd) return false;
     
-    if (PtInRect(&taskbarRect, pt)) {
-        return true;
+    DWORD style = GetWindowLong(window, GWL_STYLE);
+    DWORD exStyle = GetWindowLong(window, GWL_EXSTYLE);
+    
+    if ((style & WS_MINIMIZE) || (exStyle & WS_EX_TOOLWINDOW)) return false;
+    
+    return true;
+}
+
+bool CheckCollision(int x, int y) {
+    const int CHECK_POINTS = 3;
+    for (int i = 0; i < CHECK_POINTS; i++) {
+        POINT checkPoint = { 
+            x + (WINDOW_SIZE * i) / (CHECK_POINTS - 1),
+            y + WINDOW_SIZE 
+        };
+        
+        if (PtInRect(&taskbarRect, checkPoint)) {
+            return true;
+        }
+        
+        HWND windowAtPoint = WindowFromPoint(checkPoint);
+        
+        if (windowAtPoint && IsValidWindow(windowAtPoint)) {
+            RECT windowRect;
+            GetWindowRect(windowAtPoint, &windowRect);
+            
+            if (y + WINDOW_SIZE <= windowRect.top + 10 && 
+                y + WINDOW_SIZE >= windowRect.top - 5 &&  
+                x + WINDOW_SIZE > windowRect.left &&
+                x < windowRect.right &&
+                ySpeed >= 0) {  
+                return true;
+            }
+        }
     }
     
     if (y + WINDOW_SIZE >= GetSystemMetrics(SM_CYSCREEN)) {
@@ -177,6 +222,10 @@ bool CheckCollision(int x, int y) {
 }
 
 void UpdatePetPhysics() {
+    if (!CheckCollision(petX, petY + 1)) { 
+        isOnGround = false;
+    }
+
     if (isOnGround) {
         bool pressingLeft = (GetAsyncKeyState(VK_LEFT) & 0x8000);
         bool pressingRight = (GetAsyncKeyState(VK_RIGHT) & 0x8000);
@@ -367,7 +416,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
         if (currentSprite) {
             ImageAttributes imgAttr;
-            imgAttr.SetColorKey(Color(0, 0, 0), Color(0, 0, 0));
+            imgAttr.SetColorKey(Color(255, 255, 0, 255), Color(255, 255, 0, 255));
 
             Matrix matrix;
             if (facingLeft) {
@@ -397,21 +446,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         DeleteDC(memDC);
         ReleaseDC(NULL, hdcScreen);
         EndPaint(hwnd, &ps);
-        return 0;
-    }
-
-    case WM_TIMER:
-    {
-        UpdatePetPhysics();
-
-        frameCounter++;
-        if (frameCounter >= FRAME_DELAY) {
-            frameCounter = 0;
-            currentFrame++;
-        }
-
-        SetWindowPos(hwnd, HWND_TOPMOST, petX, petY, 0, 0, SWP_NOSIZE);
-        InvalidateRect(hwnd, NULL, TRUE);
         return 0;
     }
 
@@ -467,20 +501,50 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
     ShowWindow(hwnd, nCmdShow);
     UpdateWindow(hwnd);
 
-    SetTimer(hwnd, 1, 16, NULL);
+    QueryPerformanceFrequency(&frequency);
+    QueryPerformanceCounter(&lastTime);
 
-    distX = std::uniform_int_distribution<int>(0, GetSystemMetrics(SM_CXSCREEN) - WINDOW_SIZE);
-    distY = std::uniform_int_distribution<int>(0, GetSystemMetrics(SM_CYSCREEN) - WINDOW_SIZE);
-
-    HWND taskbar = FindWindow(L"Shell_TrayWnd", NULL);
-    GetWindowRect(taskbar, &taskbarRect);
+    UpdateTaskbarRect();
 
     MSG msg = {};
-    while (GetMessage(&msg, NULL, 0, 0)) {
-        TranslateMessage(&msg);
-        DispatchMessage(&msg);
+    while (true) {
+        while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
+            if (msg.message == WM_QUIT) {
+                goto cleanup;
+            }
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+        }
+
+        LARGE_INTEGER currentTime;
+        QueryPerformanceCounter(&currentTime);
+        double deltaTime = (currentTime.QuadPart - lastTime.QuadPart) / (double)frequency.QuadPart;
+        lastTime = currentTime;
+
+        accumulator += deltaTime;
+
+        if (accumulator < TIME_STEP) {
+            accumulator = TIME_STEP;
+        }
+
+        while (accumulator >= TIME_STEP) {
+            UpdatePetPhysics();
+            accumulator -= TIME_STEP;
+            
+            frameCounter++;
+            if (frameCounter >= FRAME_DELAY) {
+                frameCounter = 0;
+                currentFrame++;
+            }
+        }
+
+        SetWindowPos(hwnd, HWND_TOPMOST, petX, petY, 0, 0, SWP_NOSIZE);
+        InvalidateRect(hwnd, NULL, TRUE);
+
+        Sleep(1);
     }
 
+cleanup:
     CleanupSprites();
     GdiplusShutdown(gdiplusToken);
     return 0;
