@@ -7,6 +7,7 @@
 #include <vector>
 #include <string>
 #include <memory>
+#include <winuser.h>
 using namespace Gdiplus;
 
 #pragma comment(lib, "gdiplus.lib")
@@ -246,7 +247,7 @@ void UpdatePetPhysics() {
             }
         }
 
-        if (GetAsyncKeyState(VK_Z) & 0x8000 && !isJumping) {
+        if (GetAsyncKeyState('Z') & 0x8000 && !isJumping) {
             ySpeed = -JUMP_FORCE;
             isJumping = true;
             isOnGround = false;
