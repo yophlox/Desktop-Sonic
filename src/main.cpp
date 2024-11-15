@@ -86,6 +86,12 @@ bool isBalancing = false;
 const float BALANCE_THRESHOLD = 10.0f;
 const int BALANCE_FRAME_DELAY = 12;
 
+std::vector<Image*> boredSprites;
+bool isBored = false;
+DWORD lastInputTime = GetTickCount();
+const DWORD BORED_TIMEOUT = 15000; 
+const int BORED_FRAME_DELAY = 8;  
+
 void UpdateTaskbarRect() {
     HWND taskbar = FindWindow(L"Shell_TrayWnd", NULL);
     if (taskbar) {
@@ -148,6 +154,15 @@ bool LoadSprites() {
         }
     }
 
+    for (int i = 1; i <= 2; i++) {
+        wchar_t path[256];
+        swprintf_s(path, L"assets/images/boredloop%d.png", i);
+        Image* frame = Image::FromFile(path);
+        if (frame && frame->GetLastStatus() == Ok) {
+            boredSprites.push_back(frame);
+        }
+    }
+
     return true;
 }
 
@@ -186,6 +201,11 @@ void CleanupSprites() {
         delete sprite;
     }
     balanceSprites.clear();
+
+    for (auto sprite : boredSprites) {
+        delete sprite;
+    }
+    boredSprites.clear();
 }
 
 void PickNewTarget() {
@@ -246,6 +266,27 @@ bool CheckCollision(int x, int y, bool* nearEdge = nullptr) {
 }
 
 void UpdatePetPhysics() {
+    DWORD currentTime = GetTickCount();
+    if (currentTime - lastInputTime >= BORED_TIMEOUT && 
+        isOnGround && 
+        abs(groundSpeed) < 0.1f && 
+        !isLookingUp && 
+        !isCrouching && 
+        !isBalancing) {
+        isBored = true;
+    } else {
+        isBored = false;
+    }
+
+    if ((GetAsyncKeyState(VK_LEFT) & 0x8000) ||
+        (GetAsyncKeyState(VK_RIGHT) & 0x8000) ||
+        (GetAsyncKeyState(VK_UP) & 0x8000) ||
+        (GetAsyncKeyState(VK_DOWN) & 0x8000) ||
+        (GetAsyncKeyState('Z') & 0x8000)) {
+        lastInputTime = GetTickCount();
+        isBored = false;
+    }
+
     bool nearEdge = false;
     if (!CheckCollision(petX, petY + 1, &nearEdge)) { 
         isOnGround = false;
@@ -442,6 +483,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         }
         else if (isBalancing && !balanceSprites.empty()) {
             currentSprite = balanceSprites[(currentFrame / BALANCE_FRAME_DELAY) % balanceSprites.size()];
+        }
+        else if (isBored && !boredSprites.empty()) {
+            currentSprite = boredSprites[(currentFrame / BORED_FRAME_DELAY) % boredSprites.size()];
         }
         else if (idleSprite) {
             currentSprite = idleSprite;
