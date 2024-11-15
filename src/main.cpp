@@ -81,6 +81,11 @@ const double TARGET_FPS = 60.0;
 const double TIME_STEP = 1.0 / TARGET_FPS;
 double accumulator = 0.0;
 
+std::vector<Image*> balanceSprites;
+bool isBalancing = false;
+const float BALANCE_THRESHOLD = 10.0f;
+const int BALANCE_FRAME_DELAY = 12;
+
 void UpdateTaskbarRect() {
     HWND taskbar = FindWindow(L"Shell_TrayWnd", NULL);
     if (taskbar) {
@@ -134,6 +139,15 @@ bool LoadSprites() {
         return false;
     }
 
+    for (int i = 1; i <= 2; i++) {
+        wchar_t path[256];
+        swprintf_s(path, L"assets/images/balancing%d.png", i);
+        Image* frame = Image::FromFile(path);
+        if (frame && frame->GetLastStatus() == Ok) {
+            balanceSprites.push_back(frame);
+        }
+    }
+
     return true;
 }
 
@@ -167,6 +181,11 @@ void CleanupSprites() {
         delete crouchSprite;
         crouchSprite = nullptr;
     }
+
+    for (auto sprite : balanceSprites) {
+        delete sprite;
+    }
+    balanceSprites.clear();
 }
 
 void PickNewTarget() {
@@ -186,17 +205,14 @@ bool IsValidWindow(HWND window) {
     return true;
 }
 
-bool CheckCollision(int x, int y) {
+bool CheckCollision(int x, int y, bool* nearEdge = nullptr) {
+    if (nearEdge) *nearEdge = false;
     const int CHECK_POINTS = 3;
     for (int i = 0; i < CHECK_POINTS; i++) {
         POINT checkPoint = { 
             x + (WINDOW_SIZE * i) / (CHECK_POINTS - 1),
             y + WINDOW_SIZE 
         };
-        
-        if (PtInRect(&taskbarRect, checkPoint)) {
-            return true;
-        }
         
         HWND windowAtPoint = WindowFromPoint(checkPoint);
         
@@ -208,7 +224,15 @@ bool CheckCollision(int x, int y) {
                 y + WINDOW_SIZE >= windowRect.top - 5 &&  
                 x + WINDOW_SIZE > windowRect.left &&
                 x < windowRect.right &&
-                ySpeed >= 0) {  
+                ySpeed >= 0) {
+                
+                if (nearEdge && isOnGround && abs(groundSpeed) < 0.5f) {
+                    float distanceFromLeft = x - windowRect.left;
+                    float distanceFromRight = windowRect.right - (x + WINDOW_SIZE);
+                    
+                    *nearEdge = (distanceFromLeft <= BALANCE_THRESHOLD * 2 || 
+                               distanceFromRight <= BALANCE_THRESHOLD * 2);
+                }
                 return true;
             }
         }
@@ -222,8 +246,14 @@ bool CheckCollision(int x, int y) {
 }
 
 void UpdatePetPhysics() {
-    if (!CheckCollision(petX, petY + 1)) { 
+    bool nearEdge = false;
+    if (!CheckCollision(petX, petY + 1, &nearEdge)) { 
         isOnGround = false;
+    }
+    isBalancing = nearEdge;
+    
+    if (isBalancing != nearEdge) {
+        OutputDebugString(nearEdge ? L"Near Edge\n" : L"Not Near Edge\n");
     }
 
     if (isOnGround) {
@@ -409,6 +439,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         }
         else if (abs(groundSpeed) > 0.1f && !walkSprites.empty()) {
             currentSprite = walkSprites[currentFrame % walkSprites.size()];
+        }
+        else if (isBalancing && !balanceSprites.empty()) {
+            currentSprite = balanceSprites[(currentFrame / BALANCE_FRAME_DELAY) % balanceSprites.size()];
         }
         else if (idleSprite) {
             currentSprite = idleSprite;
