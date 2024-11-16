@@ -93,6 +93,9 @@ DWORD lastInputTime = GetTickCount();
 const DWORD BORED_TIMEOUT = 15000; 
 const int BORED_FRAME_DELAY = 8;  
 
+bool isDragging = false;
+POINT lastMousePos = {0, 0};
+
 void UpdateTaskbarRect() {
     HWND taskbar = FindWindow(L"Shell_TrayWnd", NULL);
     if (taskbar) {
@@ -529,10 +532,42 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
     case WM_LBUTTONDOWN:
     {
-        if (isOnGround) {
-            velocityY = JUMP_FORCE;
-            velocityX = (rand() % 2 == 0 ? -1 : 1) * MOVE_SPEED;
+        OutputDebugString(L"Mouse Down\n");
+        isDragging = true;
+        GetCursorPos(&lastMousePos);
+        SetCapture(hwnd);
+        return 0;
+    }
+
+    case WM_LBUTTONUP:
+    {
+        OutputDebugString(L"Mouse Up\n");
+        isDragging = false;
+        ReleaseCapture();
+        return 0;
+    }
+
+    case WM_MOUSEMOVE:
+    {
+        if (isDragging) {
+            OutputDebugString(L"Dragging\n");
+            POINT currentPos;
+            GetCursorPos(&currentPos);
+            
+            int deltaX = currentPos.x - lastMousePos.x;
+            int deltaY = currentPos.y - lastMousePos.y;
+            
+            petX += deltaX;
+            petY += deltaY;
+            
+            xSpeed = 0;
+            ySpeed = 0;
+            groundSpeed = 0;
             isOnGround = false;
+            isJumping = false;
+            
+            lastMousePos = currentPos;
+            InvalidateRect(hwnd, NULL, TRUE);
         }
         return 0;
     }
@@ -627,3 +662,5 @@ cleanup:
     GdiplusShutdown(gdiplusToken);
     return 0;
 }
+
+// super secret go pico comment!!
