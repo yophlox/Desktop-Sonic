@@ -1,0 +1,7 @@
+A0 - Jump
+A3 - Hurt (death)
+A6 - Spike
+B5 - Ring
+BE - Spin
+C6 - Ring Loss
+CC - Spring

@@ -8,10 +8,12 @@
 #include <string>
 #include <memory>
 #include <winuser.h>
+#include <mmsystem.h>
 using namespace Gdiplus;
 
 #pragma comment(lib, "gdiplus.lib")
 #pragma comment(lib, "msimg32.lib")
+#pragma comment(lib, "winmm.lib")
 #pragma comment(linker, "/SUBSYSTEM:WINDOWS")
 
 HINSTANCE hInst;
@@ -101,6 +103,9 @@ const float THROW_FORCE_MULTIPLIER = 0.2f;  // Change to 0.5f and then throw him
 std::vector<Image*> hurtSprites;
 bool isHurt = false;
 
+HWND jumpSound = NULL;
+HWND rollSound = NULL;
+
 void UpdateTaskbarRect() {
     HWND taskbar = FindWindow(L"Shell_TrayWnd", NULL);
     if (taskbar) {
@@ -182,6 +187,18 @@ bool LoadSprites() {
     }
 
     return true;
+}
+
+bool LoadSounds() {
+    if (!PlaySound(NULL, NULL, 0)) {
+        MessageBox(NULL, L"Failed to initialize audio", L"Error", MB_OK);
+        return false;
+    }
+    return true;
+}
+
+void PlaySoundEffect(const wchar_t* soundFile) {
+    PlaySound(soundFile, NULL, SND_FILENAME | SND_ASYNC | SND_NODEFAULT);
 }
 
 void CleanupSprites() {
@@ -344,6 +361,9 @@ void UpdatePetPhysics() {
 
         if (!isLookingUp && !isCrouching) {
             if (pressingDown && abs(groundSpeed) >= ROLL_MIN_SPEED) {
+                if (!isRolling) {
+                    PlaySoundEffect(L"assets/sounds/S1_BE.wav");
+                }
                 isRolling = true;
             } else if (abs(groundSpeed) < ROLL_MIN_SPEED) {
                 isRolling = false;
@@ -399,6 +419,7 @@ void UpdatePetPhysics() {
             ySpeed = -JUMP_FORCE;
             isJumping = true;
             isOnGround = false;
+            PlaySoundEffect(L"assets/sounds/S1_A0.wav");
         }
 
         xSpeed = groundSpeed;
@@ -619,6 +640,11 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
         return 1;
     }
 
+    if (!LoadSounds()) {
+        GdiplusShutdown(gdiplusToken);
+        return 1;
+    }
+
     hInst = hInstance;
 
     WNDCLASS wc = {};
@@ -669,13 +695,14 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
         double deltaTime = (currentTime.QuadPart - lastTime.QuadPart) / (double)frequency.QuadPart;
         lastTime = currentTime;
 
-        accumulator += deltaTime;
-
-        if (accumulator < TIME_STEP) {
-            accumulator = TIME_STEP;
+        if (deltaTime > 0.25) {
+            deltaTime = 0.25;
         }
 
-        while (accumulator >= TIME_STEP) {
+        accumulator += deltaTime;
+
+        int updateCount = 0;
+        while (accumulator >= TIME_STEP && updateCount < 4) {
             UpdatePetPhysics();
             accumulator -= TIME_STEP;
             
@@ -684,12 +711,13 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
                 frameCounter = 0;
                 currentFrame++;
             }
+            updateCount++;
         }
 
         SetWindowPos(hwnd, HWND_TOPMOST, petX, petY, 0, 0, SWP_NOSIZE);
         InvalidateRect(hwnd, NULL, TRUE);
 
-        Sleep(1);
+        Sleep(16);
     }
 
 cleanup:
