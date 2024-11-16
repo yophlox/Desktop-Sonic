@@ -96,6 +96,9 @@ const int BORED_FRAME_DELAY = 8;
 bool isDragging = false;
 POINT lastMousePos = {0, 0};
 
+std::vector<Image*> hurtSprites;
+bool isHurt = false;
+
 void UpdateTaskbarRect() {
     HWND taskbar = FindWindow(L"Shell_TrayWnd", NULL);
     if (taskbar) {
@@ -167,6 +170,15 @@ bool LoadSprites() {
         }
     }
 
+    for (int i = 1; i <= 2; i++) {
+        wchar_t path[256];
+        swprintf_s(path, L"assets/images/hurt%d.png", i);
+        Image* frame = Image::FromFile(path);
+        if (frame && frame->GetLastStatus() == Ok) {
+            hurtSprites.push_back(frame);
+        }
+    }
+
     return true;
 }
 
@@ -210,6 +222,11 @@ void CleanupSprites() {
         delete sprite;
     }
     boredSprites.clear();
+
+    for (auto sprite : hurtSprites) {
+        delete sprite;
+    }
+    hurtSprites.clear();
 }
 
 void PickNewTarget() {
@@ -270,6 +287,11 @@ bool CheckCollision(int x, int y, bool* nearEdge = nullptr) {
 }
 
 void UpdatePetPhysics() {
+    // Skip all physics updates if dragging
+    if (isDragging) {
+        return;
+    }
+
     DWORD currentTime = GetTickCount();
     if (currentTime - lastInputTime >= BORED_TIMEOUT && 
         isOnGround && 
@@ -415,6 +437,7 @@ void UpdatePetPhysics() {
         ySpeed = 0;
         isOnGround = true;
         isJumping = false;
+        isHurt = false;
         groundSpeed = xSpeed;
     }
 
@@ -470,7 +493,14 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         graphics.SetPixelOffsetMode(PixelOffsetModeHalf);
 
         Image* currentSprite = nullptr;
-        if (!isOnGround || isRolling) {
+        if (!isOnGround && !isRolling) {
+            if (isHurt) {
+                currentSprite = hurtSprites[(currentFrame / FRAME_DELAY) % hurtSprites.size()];
+            } else {
+                currentSprite = spinSprites[currentFrame % spinSprites.size()];
+            }
+        }
+        else if (isRolling) {
             currentSprite = spinSprites[currentFrame % spinSprites.size()];
         }
         else if (isLookingUp && lookUpSprite) {
@@ -543,6 +573,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
     {
         OutputDebugString(L"Mouse Up\n");
         isDragging = false;
+        isHurt = true;
+        isOnGround = false;
         ReleaseCapture();
         return 0;
     }
@@ -563,7 +595,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
             xSpeed = 0;
             ySpeed = 0;
             groundSpeed = 0;
-            isOnGround = false;
+            isOnGround = true;
             isJumping = false;
             
             lastMousePos = currentPos;
