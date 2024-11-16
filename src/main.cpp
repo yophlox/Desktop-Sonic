@@ -95,6 +95,8 @@ const int BORED_FRAME_DELAY = 8;
 
 bool isDragging = false;
 POINT lastMousePos = {0, 0};
+POINT lastValidMouseDelta = {0, 0};
+const float THROW_FORCE_MULTIPLIER = 0.2f;  // Change to 0.5f and then throw him against the wall for funny.
 
 std::vector<Image*> hurtSprites;
 bool isHurt = false;
@@ -287,7 +289,6 @@ bool CheckCollision(int x, int y, bool* nearEdge = nullptr) {
 }
 
 void UpdatePetPhysics() {
-    // Skip all physics updates if dragging
     if (isDragging) {
         return;
     }
@@ -298,6 +299,7 @@ void UpdatePetPhysics() {
         abs(groundSpeed) < 0.1f && 
         !isLookingUp && 
         !isCrouching && 
+        !isDragging &&
         !isBalancing) {
         isBored = true;
     } else {
@@ -575,6 +577,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         isDragging = false;
         isHurt = true;
         isOnGround = false;
+        
+        xSpeed = lastValidMouseDelta.x * THROW_FORCE_MULTIPLIER;
+        ySpeed = lastValidMouseDelta.y * THROW_FORCE_MULTIPLIER;
+        
         ReleaseCapture();
         return 0;
     }
@@ -592,11 +598,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
             petX += deltaX;
             petY += deltaY;
             
-            xSpeed = 0;
-            ySpeed = 0;
-            groundSpeed = 0;
-            isOnGround = true;
-            isJumping = false;
+            lastValidMouseDelta.x = deltaX;
+            lastValidMouseDelta.y = deltaY;
             
             lastMousePos = currentPos;
             InvalidateRect(hwnd, NULL, TRUE);
